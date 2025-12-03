@@ -2,12 +2,10 @@ package messaging
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"log"
 
 	"github.com/segmentio/kafka-go"
-	"github.com/segmentio/kafka-go/sasl/plain"
 )
 
 type Producer struct {
@@ -15,22 +13,11 @@ type Producer struct {
 }
 
 func NewProducer(brokers []string, topic, username, password string) *Producer {
-	mechanism := plain.Mechanism{
-		Username: username,
-		Password: password,
-	}
-
-	transport := &kafka.Transport{
-		SASL: mechanism,
-		TLS:  &tls.Config{},
-	}
-
 	return &Producer{
 		writer: &kafka.Writer{
-			Addr:      kafka.TCP(brokers...),
-			Topic:     topic,
-			Balancer:  &kafka.LeastBytes{},
-			Transport: transport,
+			Addr:     kafka.TCP(brokers...),
+			Topic:    topic,
+			Balancer: &kafka.LeastBytes{},
 		},
 	}
 }
@@ -39,7 +26,7 @@ func (p *Producer) Publish(key string, data interface{}) {
 	go func() {
 		bytes, err := json.Marshal(data)
 		if err != nil {
-			log.Printf("❌ Kafka marshal error: %v", err)
+			log.Printf("❌ Kafka marshal error for %s: %v", key, err)
 			return
 		}
 
@@ -49,11 +36,10 @@ func (p *Producer) Publish(key string, data interface{}) {
 				Value: bytes,
 			},
 		)
-
 		if err != nil {
-			log.Printf("❌ Kafka publish failed: %v", err)
+			log.Printf("❌ Kafka publish failed for %s: %v", key, err)
 		} else {
-			log.Printf("📨 Kafka published: %s", key)
+			log.Printf("✅ Published to Kafka: %s", key)
 		}
 	}()
 }

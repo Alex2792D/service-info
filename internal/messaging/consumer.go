@@ -2,63 +2,37 @@ package messaging
 
 import (
 	"context"
-	"crypto/tls"
 	"log"
 
 	"github.com/segmentio/kafka-go"
-	"github.com/segmentio/kafka-go/sasl/plain"
 )
 
 type Consumer struct {
 	reader *kafka.Reader
-	stop   chan struct{}
 }
 
-func NewConsumer(brokers []string, topic, group, username, password string) *Consumer {
-	mechanism := plain.Mechanism{
-		Username: username,
-		Password: password,
-	}
-
-	dialer := &kafka.Dialer{
-		SASLMechanism: mechanism,
-		TLS:           &tls.Config{},
-	}
-
+func NewConsumer(brokers []string, topic, group, redisURL, password string) *Consumer {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: brokers,
-		Topic:   topic,
 		GroupID: group,
-		Dialer:  dialer,
+		Topic:   topic,
 	})
-
-	return &Consumer{
-		reader: reader,
-		stop:   make(chan struct{}),
-	}
+	return &Consumer{reader: reader}
 }
 
-func (c *Consumer) Start(handler func(key, value []byte)) {
+func (c *Consumer) Start(handle func(key []byte, value []byte)) {
 	go func() {
 		for {
-			select {
-			case <-c.stop:
-				return
-			default:
-			}
-
 			m, err := c.reader.ReadMessage(context.Background())
 			if err != nil {
-				log.Printf("❌ Kafka read error: %v", err)
+				log.Printf("Kafka consumer error: %v", err)
 				continue
 			}
-
-			handler(m.Key, m.Value)
+			handle(m.Key, m.Value)
 		}
 	}()
 }
 
 func (c *Consumer) Stop() {
-	close(c.stop)
 	c.reader.Close()
 }
