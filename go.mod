@@ -2,11 +2,7 @@ module service-info
 
 go 1.25.0
 
-
-require (
-	github.com/go-redis/redis/v8 v8.11.5
-	github.com/redis/go-redis/v9 v9.17.2
-)
+require github.com/redis/go-redis/v9 v9.17.2
 
 require (
 	github.com/klauspost/compress v1.15.9 // indirect
