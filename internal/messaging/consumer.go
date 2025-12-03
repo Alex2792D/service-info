@@ -2,49 +2,64 @@ package messaging
 
 import (
 	"context"
+	"crypto/tls"
 	"log"
+	"os"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/segmentio/kafka-go"
+	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/sasl/scram"
 )
 
 type Consumer struct {
-	reader *kafka.Reader
+	client *kgo.Client
 	redis  *redis.Client
+	topic  string
 }
 
 func NewConsumer(brokers []string, topic, group string, redisClient *redis.Client) *Consumer {
-	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:  brokers,
-		GroupID:  group,
-		Topic:    topic,
-		MinBytes: 1,
-		MaxBytes: 10e6,
-	})
+	username := os.Getenv("KAFKA_USERNAME")
+	password := os.Getenv("KAFKA_PASSWORD")
+
+	opts := []kgo.Opt{
+		kgo.SeedBrokers(brokers...),
+		kgo.DialTLSConfig(&tls.Config{}),
+		kgo.SASL(scram.Auth{User: username, Pass: password}.AsSha256Mechanism()),
+		kgo.ConsumeTopics(topic),
+		kgo.ConsumerGroup(group),
+		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
+	}
+
+	client, err := kgo.NewClient(opts...)
+	if err != nil {
+		log.Fatalf("❌ Failed to create Kafka consumer: %v", err)
+	}
+
 	return &Consumer{
-		reader: reader,
+		client: client,
 		redis:  redisClient,
+		topic:  topic,
 	}
 }
 
 func (c *Consumer) Start(handler func(key, value []byte)) {
 	go func() {
 		for {
-			m, err := c.reader.FetchMessage(context.Background())
-			if err != nil {
-				log.Printf("Kafka consumer error: %v", err)
-				continue
+			fetches := c.client.PollFetches(context.Background())
+			if errs := fetches.Errors(); len(errs) > 0 {
+				log.Printf("Kafka fetch errors: %v", errs)
 			}
-
-			if handler != nil {
-				handler(m.Key, m.Value)
+			iter := fetches.RecordIter()
+			for !iter.Done() {
+				record := iter.Next()
+				if handler != nil {
+					handler(record.Key, record.Value)
+				}
 			}
-
-			c.reader.CommitMessages(context.Background(), m)
 		}
 	}()
 }
 
 func (c *Consumer) Stop() {
-	c.reader.Close()
+	c.client.Close()
 }

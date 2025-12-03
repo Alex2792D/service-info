@@ -157,14 +157,11 @@ func main() {
 	// ------------------------
 	// Kafka
 	// ------------------------
-	var producer *messaging.Producer
-	var consumer *messaging.Consumer
-
-	kafkaBrokers := strings.Split(getEnv("KAFKA_BROKERS", "localhost:9092"), ",")
+	kafkaBrokers := strings.Split(getEnv("KAFKA_BROKERS", ""), ",")
 	kafkaTopic := getEnv("KAFKA_TOPIC", "weather-updates")
 
-	producer = messaging.NewProducer(kafkaBrokers, kafkaTopic)
-	consumer = messaging.NewConsumer(kafkaBrokers, kafkaTopic, "weather-redis-syncer", redisClient)
+	producer := messaging.NewProducer(kafkaBrokers, kafkaTopic)
+	consumer := messaging.NewConsumer(kafkaBrokers, kafkaTopic, "weather-redis-syncer", redisClient)
 
 	// Consumer с обработчиком сообщений
 	consumer.Start(func(key, value []byte) {

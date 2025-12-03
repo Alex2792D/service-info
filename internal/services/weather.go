@@ -36,7 +36,7 @@ func (s *WeatherService) GetWeatherByCity(city string) (*models.Weather, error) 
 	ctx := context.Background()
 	key := "weather:" + strings.ToLower(strings.TrimSpace(city))
 
-	// 🔍 Чтение из Redis
+	// Чтение из Redis
 	if data, err := s.redis.Get(ctx, key).Bytes(); err == nil {
 		var w models.Weather
 		if json.Unmarshal(data, &w) == nil {
@@ -45,16 +45,16 @@ func (s *WeatherService) GetWeatherByCity(city string) (*models.Weather, error) 
 		}
 	}
 
-	// 🌐 Запрос к WeatherAPI
+	// Запрос к WeatherAPI
 	w, err := s.fetchFromWeatherAPI(city)
 	if err != nil {
 		return nil, fmt.Errorf("WeatherAPI error: %w", err)
 	}
 
-	// 📤 Публикация в Kafka
+	// Публикация в Kafka
 	if s.producer != nil {
-		keyBytes := []byte(key)          // key = "weather:<city>"
-		valueBytes, _ := json.Marshal(w) // сериализация Weather
+		keyBytes := []byte(key)
+		valueBytes, _ := json.Marshal(w)
 		if err := s.producer.Publish(keyBytes, valueBytes); err != nil {
 			log.Printf("❌ Failed to publish weather: %v", err)
 		}

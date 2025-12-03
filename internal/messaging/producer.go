@@ -2,43 +2,61 @@ package messaging
 
 import (
 	"context"
+	"crypto/tls"
 	"log"
+	"os"
 
-	"github.com/segmentio/kafka-go"
+	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/sasl/scram"
 )
 
 type Producer struct {
 	topic  string
-	writer *kafka.Writer
+	client *kgo.Client
 }
 
 func NewProducer(brokers []string, topic string) *Producer {
+	username := os.Getenv("KAFKA_USERNAME")
+	password := os.Getenv("KAFKA_PASSWORD")
+
+	opts := []kgo.Opt{
+		kgo.SeedBrokers(brokers...),
+		kgo.DialTLSConfig(&tls.Config{}),
+		kgo.SASL(scram.Auth{User: username, Pass: password}.AsSha256Mechanism()),
+	}
+
+	client, err := kgo.NewClient(opts...)
+	if err != nil {
+		log.Fatalf("❌ Failed to create Kafka producer: %v", err)
+	}
+
 	return &Producer{
-		topic: topic,
-		writer: &kafka.Writer{
-			Addr:     kafka.TCP(brokers...),
-			Topic:    topic,
-			Balancer: &kafka.LeastBytes{},
-		},
+		topic:  topic,
+		client: client,
 	}
 }
 
 func (p *Producer) Close() {
-	if err := p.writer.Close(); err != nil {
-		log.Printf("❌ Kafka producer close error: %v", err)
-	}
+	p.client.Close()
 }
 
-// Publish публикует ключ и значение в Kafka
-func (p *Producer) Publish(key []byte, value []byte) error {
-	msg := kafka.Message{
+func (p *Producer) Publish(key, value []byte) error {
+	msg := &kgo.Record{
+		Topic: p.topic,
 		Key:   key,
 		Value: value,
 	}
-	if err := p.writer.WriteMessages(context.Background(), msg); err != nil {
-		log.Printf("❌ Kafka publish error: %v", err)
-		return err
+
+	results := p.client.ProduceSync(context.Background(), msg)
+
+	// Проверяем результаты
+	for _, r := range results {
+		if r.Err != nil {
+			log.Printf("❌ Kafka publish error: %v", r.Err)
+			return r.Err
+		}
 	}
-	log.Printf("✅ Message published to Kafka: key=%s", string(key))
+
+	log.Printf("✅ Message published: key=%s", string(key))
 	return nil
 }
