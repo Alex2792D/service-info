@@ -22,16 +22,32 @@ func main() {
 	godotenv.Load()
 
 	// 🔌 Config
-	redisAddr := getEnv("REDIS_ADDR", "localhost:6379")
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		redisURL = getEnv("REDIS_ADDR", "redis://localhost:6379") // старый способ или локалка
+	}
+
+	opt, err := redis.ParseURL(redisURL)
+	if err != nil {
+		log.Fatalf("❌ Invalid Redis URL: %v", err)
+	}
 	kafkaBrokers := []string{getEnv("KAFKA_BROKER", "localhost:9092")}
 	kafkaTopic := getEnv("KAFKA_TOPIC", "weather-updates")
 
 	// 📡 Redis client (shared: WeatherService reads, Consumer writes)
-	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr})
-	_, err := redisClient.Ping(context.Background()).Result()
+	// 📡 Redis client (shared: WeatherService reads, Consumer writes)
+	redisClient := redis.NewClient(opt)
+
+	// Проверяем подключение с таймаутом (на Render иногда нужно пару секунд)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err = redisClient.Ping(ctx).Result()
 	if err != nil {
 		log.Fatalf("❌ Redis connection failed: %v", err)
 	}
+
+	log.Println("✅ Redis connected successfully")
 	defer redisClient.Close()
 
 	// 📡 Producer
