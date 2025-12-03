@@ -53,12 +53,10 @@ func (s *WeatherService) GetWeatherByCity(city string) (*models.Weather, error) 
 
 	// 📤 Публикация в Kafka
 	if s.producer != nil {
-		// ключ тоже в []byte
-		if s.producer != nil {
-			valueBytes, _ := json.Marshal(w)         // сериализуем в []byte
-			keyBytes := []byte(key)                  // ключ тоже в []byte
-			s.producer.Publish(keyBytes, valueBytes) // просто вызываем, без if err :=
-			log.Printf("✅ Published weather to Kafka for %s", city)
+		keyBytes := []byte(key)          // key = "weather:<city>"
+		valueBytes, _ := json.Marshal(w) // сериализация Weather
+		if err := s.producer.Publish(keyBytes, valueBytes); err != nil {
+			log.Printf("❌ Failed to publish weather: %v", err)
 		}
 	}
 
