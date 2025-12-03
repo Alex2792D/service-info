@@ -2,42 +2,58 @@ package messaging
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"log"
 
 	"github.com/segmentio/kafka-go"
+	"github.com/segmentio/kafka-go/sasl/plain"
 )
 
 type Producer struct {
 	writer *kafka.Writer
 }
 
-func NewProducer(brokers []string, topic string) *Producer {
+func NewProducer(brokers []string, topic, username, password string) *Producer {
+	mechanism := plain.Mechanism{
+		Username: username,
+		Password: password,
+	}
+
+	transport := &kafka.Transport{
+		SASL: mechanism,
+		TLS:  &tls.Config{},
+	}
+
 	return &Producer{
 		writer: &kafka.Writer{
-			Addr:     kafka.TCP(brokers...),
-			Topic:    topic,
-			Balancer: &kafka.LeastBytes{},
+			Addr:      kafka.TCP(brokers...),
+			Topic:     topic,
+			Balancer:  &kafka.LeastBytes{},
+			Transport: transport,
 		},
 	}
 }
 
-func (p *Producer) PublishWeather(city string, data any) {
+func (p *Producer) Publish(key string, data interface{}) {
 	go func() {
 		bytes, err := json.Marshal(data)
 		if err != nil {
-			log.Printf("❌ Kafka marshal error for %s: %v", city, err)
+			log.Printf("❌ Kafka marshal error: %v", err)
 			return
 		}
 
-		err = p.writer.WriteMessages(context.Background(), kafka.Message{
-			Key:   []byte(city),
-			Value: bytes,
-		})
+		err = p.writer.WriteMessages(context.Background(),
+			kafka.Message{
+				Key:   []byte(key),
+				Value: bytes,
+			},
+		)
+
 		if err != nil {
-			log.Printf("❌ Kafka publish failed for %s: %v", city, err)
+			log.Printf("❌ Kafka publish failed: %v", err)
 		} else {
-			log.Printf("✅ Published to Kafka: %s", city)
+			log.Printf("📨 Kafka published: %s", key)
 		}
 	}()
 }

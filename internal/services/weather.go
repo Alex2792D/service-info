@@ -52,7 +52,9 @@ func (s *WeatherService) GetWeatherByCity(city string) (*models.Weather, error) 
 	}
 
 	// 📤 3. Публикация в Kafka (async) — и всё!
-	s.producer.PublishWeather(city, w)
+	if s.producer != nil {
+		s.producer.Publish(city, w)
+	}
 
 	// ➕ 4. Возвращаем клиенту СРАЗУ — НЕ ждём Redis!
 	// Redis обновит consumer позже
