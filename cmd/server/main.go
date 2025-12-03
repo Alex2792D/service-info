@@ -28,6 +28,10 @@ func main() {
 
 	// 📡 Redis client (shared: WeatherService reads, Consumer writes)
 	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr})
+	_, err := redisClient.Ping(context.Background()).Result()
+	if err != nil {
+		log.Fatalf("❌ Redis connection failed: %v", err)
+	}
 	defer redisClient.Close()
 
 	// 📡 Producer
@@ -48,20 +52,24 @@ func main() {
 	r.Get("/weather", handler.GetWeather)
 
 	// 🏁 Server
-	srv := &http.Server{Addr: ":8080", Handler: r}
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	srv := &http.Server{Addr: ":" + port, Handler: r}
 
 	// Graceful shutdown
 	go func() {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 		<-sig
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		log.Println("🛑 Shutting down...")
 		srv.Shutdown(ctx)
 	}()
 
-	log.Println("🚀 Server started on :8080")
+	log.Printf("🚀 Server started on :%s", port)
 	log.Fatal(srv.ListenAndServe())
 }
 
