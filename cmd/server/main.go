@@ -31,11 +31,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("❌ Invalid Redis URL: %v", err)
 	}
-	kafkaBrokers := []string{getEnv("KAFKA_BROKER", "localhost:9092")}
+	kafkaBrokers := []string{getEnv("KAFKA_BROKERS", "localhost:9092")}
 	kafkaTopic := getEnv("KAFKA_TOPIC", "weather-updates")
 
-	// 📡 Redis client (shared: WeatherService reads, Consumer writes)
-	// 📡 Redis client (shared: WeatherService reads, Consumer writes)
 	redisClient := redis.NewClient(opt)
 
 	// Проверяем подключение с таймаутом (на Render иногда нужно пару секунд)
