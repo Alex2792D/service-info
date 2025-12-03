@@ -36,7 +36,7 @@ func (s *WeatherService) GetWeatherByCity(city string) (*models.Weather, error) 
 	ctx := context.Background()
 	key := "weather:" + strings.ToLower(strings.TrimSpace(city))
 
-	// 🔍 Cache hit
+	// 🔍 Чтение из Redis
 	if data, err := s.redis.Get(ctx, key).Bytes(); err == nil {
 		var w models.Weather
 		if json.Unmarshal(data, &w) == nil {
@@ -45,18 +45,23 @@ func (s *WeatherService) GetWeatherByCity(city string) (*models.Weather, error) 
 		}
 	}
 
-	// 🌐 Fetch from WeatherAPI
+	// 🌐 Запрос к WeatherAPI
 	w, err := s.fetchFromWeatherAPI(city)
 	if err != nil {
 		return nil, fmt.Errorf("WeatherAPI error: %w", err)
 	}
 
-	// 📤 Publish to Kafka (if enabled)
+	// 📤 Публикация в Kafka
 	if s.producer != nil {
-		s.producer.Publish(city, w)
+		// ключ тоже в []byte
+		if s.producer != nil {
+			valueBytes, _ := json.Marshal(w)         // сериализуем в []byte
+			keyBytes := []byte(key)                  // ключ тоже в []byte
+			s.producer.Publish(keyBytes, valueBytes) // просто вызываем, без if err :=
+			log.Printf("✅ Published weather to Kafka for %s", city)
+		}
 	}
 
-	// ➕ Return immediately; Redis will update via consumer
 	return w, nil
 }
 

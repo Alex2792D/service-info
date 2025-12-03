@@ -112,6 +112,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -130,14 +131,16 @@ import (
 )
 
 func main() {
+	// Загружаем .env
 	godotenv.Load()
 
-	// 🔌 Redis
+	// ------------------------
+	// Redis
+	// ------------------------
 	redisURL := os.Getenv("REDIS_URL")
 	if redisURL == "" {
-		log.Fatal("❌ REDIS_URL не задан.")
+		redisURL = "redis://localhost:6379"
 	}
-
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
 		log.Fatalf("❌ Invalid Redis URL: %v", err)
@@ -145,48 +148,67 @@ func main() {
 	redisClient := redis.NewClient(opt)
 	defer redisClient.Close()
 
-	if err := redisClient.Ping(context.Background()).Err(); err != nil {
-		log.Fatalf(" Redis connection failed: %v", err)
+	ctx := context.Background()
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		log.Fatalf("❌ Redis connection failed: %v", err)
 	}
 	log.Println("✅ Redis connected successfully")
 
-	// 📡 Kafka (опционально)
+	// ------------------------
+	// Kafka
+	// ------------------------
 	var producer *messaging.Producer
 	var consumer *messaging.Consumer
 
-	if kafkaBrokersStr := os.Getenv("KAFKA_BROKERS"); kafkaBrokersStr != "" {
-		kafkaBrokers := strings.Split(kafkaBrokersStr, ",")
-		kafkaTopic := getEnv("KAFKA_TOPIC", "weather-updates")
-		kafkaUser := os.Getenv("KAFKA_USERNAME")
-		kafkaPass := os.Getenv("KAFKA_PASSWORD")
+	kafkaBrokers := strings.Split(getEnv("KAFKA_BROKERS", "localhost:9092"), ",")
+	kafkaTopic := getEnv("KAFKA_TOPIC", "weather-updates")
 
-		producer = messaging.NewProducer(kafkaBrokers, kafkaTopic, kafkaUser, kafkaPass)
-		defer producer.Close()
+	producer = messaging.NewProducer(kafkaBrokers, kafkaTopic)
+	consumer = messaging.NewConsumer(kafkaBrokers, kafkaTopic, "weather-redis-syncer", redisClient)
 
-		consumer = messaging.NewConsumer(kafkaBrokers, kafkaTopic, "weather-redis-syncer", os.Getenv("REDIS_URL"), kafkaPass)
-		consumer.Start(func(key []byte, value []byte) {
-			log.Printf("Received message: key=%s, value=%s", string(key), string(value))
-			// Здесь можно писать в Redis
-			redisClient.Set(context.Background(), string(key), value, 10*time.Minute)
-		})
-		defer consumer.Stop()
+	// Consumer с обработчиком сообщений
+	consumer.Start(func(key, value []byte) {
+		var msg map[string]interface{}
+		if err := json.Unmarshal(value, &msg); err != nil {
+			log.Printf("❌ Invalid Kafka message: %v", err)
+			return
+		}
 
-		log.Println("✅ Kafka initialized")
-	} else {
-		log.Println("🟡 Kafka disabled — using direct Redis writes")
-	}
+		// Сохраняем в Redis
+		if keyStr := string(key); keyStr != "" {
+			data, _ := json.Marshal(msg)
+			if err := redisClient.Set(ctx, keyStr, data, 10*time.Minute).Err(); err != nil {
+				log.Printf("❌ Redis write error: %v", err)
+			} else {
+				log.Printf("✅ Redis updated for key: %s", keyStr)
+			}
+		}
+	})
+	defer consumer.Stop()
+	defer producer.Close()
 
-	// 🌤️ Weather service
+	log.Println("✅ Kafka producer/consumer initialized")
+
+	// ------------------------
+	// Weather Service + Handler
+	// ------------------------
 	weatherService := services.NewWeatherService(redisClient, producer)
 	handler := handlers.NewWeatherHandler(weatherService)
 
-	// 🧭 Router
+	// ------------------------
+	// Router
+	// ------------------------
 	r := chi.NewRouter()
 	r.Get("/weather", handler.GetWeather)
 
-	// 🏁 Server
+	// ------------------------
+	// Server
+	// ------------------------
 	port := getEnv("PORT", "8080")
-	srv := &http.Server{Addr: ":" + port, Handler: r}
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: r,
+	}
 
 	// Graceful shutdown
 	go func() {
