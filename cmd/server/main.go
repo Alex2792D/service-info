@@ -24,23 +24,51 @@
 
 // func main() {
 // 	// Загружаем .env
-// 	godotenv.Load()
+// 	if err := godotenv.Load(); err != nil {
+// 		log.Println("⚠️ .env not loaded (ok for prod)")
+// 	}
 
 // 	// 1. Подключаемся к PostgreSQL
-// 	db, err := sql.Open("postgres", "host=localhost port=5432 user=postgres password=pass dbname=users sslmode=disable")
+// 	// Получаем URL из env, fallback — локальный
+// 	dbURL := os.Getenv("DATABASE_URL")
+// 	if dbURL == "" {
+// 		log.Fatal("❌ DATABASE_URL is required in production")
+// 	}
+
+// 	db, err := sql.Open("postgres", dbURL)
 // 	if err != nil {
 // 		log.Fatal("❌ Не удалось создать соединение с БД:", err)
 // 	}
+// 	_, err = db.Exec(`
+//     CREATE TABLE IF NOT EXISTS users (
+//         id SERIAL PRIMARY KEY,
+//         user_id BIGINT NOT NULL UNIQUE,
+//         username TEXT,
+//         first_name TEXT,
+//         last_name TEXT,
+//         created_at TIMESTAMPTZ DEFAULT NOW()
+//     );
+// `)
+// 	if err != nil {
+// 		log.Fatal("❌ Failed to create users table:", err)
+// 	}
+
+// 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_users_user_id ON users(user_id);`)
+// 	if err != nil {
+// 		log.Fatal("❌ Failed to create index:", err)
+// 	}
+
+// 	log.Println("✅ DB schema is up to date")
 // 	defer db.Close()
 
-// 	// 2. Проверяем подключение с таймаутом
+// 	// Проверяем подключение
 // 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-// 	defer cancel()
 // 	if err := db.PingContext(ctx); err != nil {
+// 		cancel()
 // 		log.Fatal("❌ Не удалось подключиться к БД:", err)
 // 	}
-// 	log.Println("✅ Успешное подключение к PostgreSQL")
-
+// 	cancel()
+// 	log.Println("✅ Подключение к PostgreSQL установлено")
 // 	// ------------------------
 // 	// Redis
 // 	// ------------------------
@@ -53,58 +81,81 @@
 // 		log.Fatalf("❌ Invalid Redis URL: %v", err)
 // 	}
 // 	redisClient := redis.NewClient(opt)
-// 	defer redisClient.Close()
 
-// 	ctx := context.Background()
+// 	ctx = context.Background()
 // 	if err := redisClient.Ping(ctx).Err(); err != nil {
 // 		log.Fatalf("❌ Redis connection failed: %v", err)
 // 	}
 // 	log.Println("✅ Redis connected successfully")
 
 // 	// ------------------------
-// 	// Kafka
+// 	// Kafka — раздельные топики
 // 	// ------------------------
-// 	kafkaTopic := getEnv("KAFKA_TOPIC", "weather-updates")
-// 	producer := messaging.NewProducer(kafkaTopic)
-// 	consumer := messaging.NewConsumer(kafkaTopic, "weather-redis-syncer")
+// 	weatherTopic := getEnv("WEATHER_KAFKA_TOPIC", "weather-updates")
+// 	userTopic := getEnv("USER_KAFKA_TOPIC", "user-events")
 
-// 	// Consumer с обработчиком сообщений
-// 	consumer.Start(func(key, value []byte) {
+// 	weatherProducer := messaging.NewProducer(weatherTopic)
+// 	userProducer := messaging.NewProducer(userTopic)
+
+// 	// Consumer для погоды → Redis
+// 	weatherConsumer := messaging.NewConsumer(weatherTopic, "weather-redis-syncer")
+// 	weatherConsumer.Start(func(key, value []byte) {
 // 		var msg map[string]interface{}
 // 		if err := json.Unmarshal(value, &msg); err != nil {
-// 			log.Printf("❌ Invalid Kafka message: %v", err)
+// 			log.Printf("❌ Invalid Kafka weather message: %v", err)
 // 			return
 // 		}
 
-// 		// Сохраняем в Redis
 // 		if keyStr := string(key); keyStr != "" {
 // 			data, _ := json.Marshal(msg)
 // 			if err := redisClient.Set(ctx, keyStr, data, 10*time.Minute).Err(); err != nil {
-// 				log.Printf("❌ Redis write error: %v", err)
+// 				log.Printf("❌ Redis weather write error: %v", err)
 // 			} else {
-// 				log.Printf("✅ Redis updated for key: %s", keyStr)
+// 				log.Printf("✅ Redis updated (weather): %s", keyStr)
 // 			}
 // 		}
 // 	})
-// 	defer consumer.Stop()
-// 	defer producer.Close()
 
-// 	log.Println("✅ Kafka producer/consumer initialized")
+// 	// 🔁 Опционально: consumer для пользователей → Redis
+// 	// Раскомментируй, если хочешь синхронизировать пользователей в Redis
+
+// 	userConsumer := messaging.NewConsumer(userTopic, "user-redis-syncer")
+// 	userConsumer.Start(func(key, value []byte) {
+// 		var user map[string]interface{}
+// 		if err := json.Unmarshal(value, &user); err != nil {
+// 			log.Printf("❌ Invalid Kafka user message: %v", err)
+// 			return
+// 		}
+// 		keyStr := "user:" + string(key)
+// 		if err := redisClient.Set(ctx, keyStr, value, 24*time.Hour).Err(); err != nil {
+// 			log.Printf("❌ Redis user write error: %v", err)
+// 		} else {
+// 			log.Printf("✅ Redis updated (user): %s", keyStr)
+// 		}
+// 	})
+
+// 	log.Println("✅ Kafka producers/consumers initialized")
 
 // 	// ------------------------
-// 	// Weather Service + Handler
+// 	// Services & Handlers
 // 	// ------------------------
 // 	userRepo := repositories.NewUserRepository(db)
-// 	weatherService := services.NewWeatherService(redisClient, producer)
-// 	userService := services.NewUserService(userRepo, producer)
+// 	weatherService := services.NewWeatherService(redisClient, weatherProducer)
+// 	userService := services.NewUserService(userRepo, userProducer) // ← userProducer!
 // 	handler := handlers.NewWeatherHandler(weatherService)
 // 	handlerUser := handlers.NewUserHandler(userService)
+
 // 	// ------------------------
 // 	// Router
 // 	// ------------------------
 // 	r := chi.NewRouter()
+// 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+// 		w.WriteHeader(http.StatusOK)
+// 		w.Write([]byte("OK"))
+// 	})
 // 	r.Get("/weather", handler.GetWeather)
 // 	r.Post("/user", handlerUser.CreateUser)
+
 // 	// ------------------------
 // 	// Server
 // 	// ------------------------
@@ -114,19 +165,48 @@
 // 		Handler: r,
 // 	}
 
-// 	// Graceful shutdown
+// 	// Graceful shutdown — управляется вручную
+// 	shutdown := make(chan struct{})
 // 	go func() {
 // 		sig := make(chan os.Signal, 1)
 // 		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 // 		<-sig
-// 		log.Println("🛑 Shutting down...")
+
+// 		log.Println("🛑 Shutting down gracefully...")
+
+// 		// 1. Останавливаем consumer'ов
+// 		weatherConsumer.Stop()
+// 		// userConsumer.Stop() // ← раскомментируй, если включил userConsumer выше
+
+// 		// 2. Закрываем producer'ов
+// 		weatherProducer.Close()
+// 		userProducer.Close()
+
+// 		// 3. Закрываем Redis
+// 		if err := redisClient.Close(); err != nil {
+// 			log.Printf("⚠️ Redis close error: %v", err)
+// 		}
+
+// 		// 4. Останавливаем HTTP-сервер
 // 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 // 		defer cancel()
-// 		srv.Shutdown(ctx)
+// 		if err := srv.Shutdown(ctx); err != nil {
+// 			log.Printf("⚠️ Server shutdown error: %v", err)
+// 		}
+
+// 		close(shutdown)
 // 	}()
 
 // 	log.Printf("🚀 Server started on :%s", port)
-// 	log.Fatal(srv.ListenAndServe())
+
+// 	// Запускаем сервер
+// 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+// 		log.Fatalf("❌ Server failed: %v", err)
+// 	}
+
+// 	// Ждём завершения shutdown
+// 	<-shutdown
+// 	log.Println("✅ Server stopped")
 // }
 
 // func getEnv(key, fallback string) string {
@@ -177,6 +257,11 @@ func main() {
 	if err != nil {
 		log.Fatal("❌ Не удалось создать соединение с БД:", err)
 	}
+	defer db.Close()
+
+	// ------------------------
+	// ✅ СЕРЫЙ БЛОК: СОЗДАНИЕ ТАБЛИЦЫ И ИНДЕКСА — НЕ ТРОГАТЬ
+	// ------------------------
 	_, err = db.Exec(`
     CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -195,9 +280,8 @@ func main() {
 	if err != nil {
 		log.Fatal("❌ Failed to create index:", err)
 	}
-
 	log.Println("✅ DB schema is up to date")
-	defer db.Close()
+	// ------------------------
 
 	// Проверяем подключение
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -207,6 +291,7 @@ func main() {
 	}
 	cancel()
 	log.Println("✅ Подключение к PostgreSQL установлено")
+
 	// ------------------------
 	// Redis
 	// ------------------------
@@ -254,9 +339,7 @@ func main() {
 		}
 	})
 
-	// 🔁 Опционально: consumer для пользователей → Redis
-	// Раскомментируй, если хочешь синхронизировать пользователей в Redis
-
+	// 🔁 Consumer для пользователей → Redis
 	userConsumer := messaging.NewConsumer(userTopic, "user-redis-syncer")
 	userConsumer.Start(func(key, value []byte) {
 		var user map[string]interface{}
@@ -279,7 +362,7 @@ func main() {
 	// ------------------------
 	userRepo := repositories.NewUserRepository(db)
 	weatherService := services.NewWeatherService(redisClient, weatherProducer)
-	userService := services.NewUserService(userRepo, userProducer) // ← userProducer!
+	userService := services.NewUserService(userRepo, userProducer)
 	handler := handlers.NewWeatherHandler(weatherService)
 	handlerUser := handlers.NewUserHandler(userService)
 
@@ -287,6 +370,13 @@ func main() {
 	// Router
 	// ------------------------
 	r := chi.NewRouter()
+
+	// 🟢 КРИТИЧЕСКАЯ ПРАВКА №1: ОБЯЗАТЕЛЬНЫЙ HEALTH-CHECK
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
 	r.Get("/weather", handler.GetWeather)
 	r.Post("/user", handlerUser.CreateUser)
 
@@ -299,8 +389,9 @@ func main() {
 		Handler: r,
 	}
 
-	// Graceful shutdown — управляется вручную
-	shutdown := make(chan struct{})
+	// ------------------------
+	// ✅ СЕРЫЙ БЛОК: GRACEFUL SHUTDOWN — НЕ ТРОГАТЬ (оставить как есть)
+	// ------------------------
 	go func() {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
@@ -308,40 +399,29 @@ func main() {
 
 		log.Println("🛑 Shutting down gracefully...")
 
-		// 1. Останавливаем consumer'ов
 		weatherConsumer.Stop()
-		// userConsumer.Stop() // ← раскомментируй, если включил userConsumer выше
-
-		// 2. Закрываем producer'ов
+		userConsumer.Stop()
 		weatherProducer.Close()
 		userProducer.Close()
 
-		// 3. Закрываем Redis
 		if err := redisClient.Close(); err != nil {
 			log.Printf("⚠️ Redis close error: %v", err)
 		}
 
-		// 4. Останавливаем HTTP-сервер
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
 			log.Printf("⚠️ Server shutdown error: %v", err)
 		}
-
-		close(shutdown)
 	}()
+	// ------------------------
 
-	log.Printf("🚀 Server started on :%s", port)
-
-	// Запускаем сервер
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("❌ Server failed: %v", err)
-	}
-
-	// Ждём завершения shutdown
-	<-shutdown
-	log.Println("✅ Server stopped")
+	// 🟢 КРИТИЧЕСКАЯ ПРАВКА №2: ЗАПУСК СЕРВЕРА — ДОЛЖЕН БЫТЬ ПОСЛЕДНИМ И БЛОКИРУЮЩИМ
+	log.Printf("🚀 Server starting on :%s", port)
+	log.Fatal(srv.ListenAndServe()) // ← ЭТО ПОСЛЕДНЯЯ СТРОКА main()
 }
+
+// ← сюда ничего не добавлять
 
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
