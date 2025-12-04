@@ -16,7 +16,8 @@ type Producer struct {
 	client *kgo.Client
 }
 
-func NewProducer(brokers []string, topic string) *Producer {
+func NewProducer(topic string) *Producer {
+	brokers := []string{os.Getenv("KAFKA_BROKERS")}
 	username := os.Getenv("KAFKA_USERNAME")
 	password := os.Getenv("KAFKA_PASSWORD")
 
@@ -52,7 +53,6 @@ func (p *Producer) Publish(key, value []byte) error {
 	defer cancel()
 	results := p.client.ProduceSync(ctx, msg)
 
-	// Проверяем результаты
 	for _, r := range results {
 		if r.Err != nil {
 			log.Printf("❌ Kafka publish error: %v", r.Err)

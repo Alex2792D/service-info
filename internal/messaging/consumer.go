@@ -6,18 +6,17 @@ import (
 	"log"
 	"os"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl/scram"
 )
 
 type Consumer struct {
 	client *kgo.Client
-	redis  *redis.Client
 	topic  string
 }
 
-func NewConsumer(brokers []string, topic, group string, redisClient *redis.Client) *Consumer {
+func NewConsumer(topic, group string) *Consumer {
+	brokers := []string{os.Getenv("KAFKA_BROKERS")}
 	username := os.Getenv("KAFKA_USERNAME")
 	password := os.Getenv("KAFKA_PASSWORD")
 
@@ -37,7 +36,6 @@ func NewConsumer(brokers []string, topic, group string, redisClient *redis.Clien
 
 	return &Consumer{
 		client: client,
-		redis:  redisClient,
 		topic:  topic,
 	}
 }

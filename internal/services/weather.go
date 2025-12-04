@@ -32,11 +32,12 @@ func NewWeatherService(redis *redis.Client, producer *messaging.Producer) *Weath
 	}
 }
 
+// GetWeatherByCity получает погоду из Redis или WeatherAPI
 func (s *WeatherService) GetWeatherByCity(city string) (*models.Weather, error) {
 	ctx := context.Background()
 	key := "weather:" + strings.ToLower(strings.TrimSpace(city))
 
-	// Чтение из Redis
+	// 🔹 Чтение из Redis
 	if data, err := s.redis.Get(ctx, key).Bytes(); err == nil {
 		var w models.Weather
 		if json.Unmarshal(data, &w) == nil {
@@ -45,13 +46,13 @@ func (s *WeatherService) GetWeatherByCity(city string) (*models.Weather, error) 
 		}
 	}
 
-	// Запрос к WeatherAPI
+	// 🔹 Запрос к WeatherAPI
 	w, err := s.fetchFromWeatherAPI(city)
 	if err != nil {
 		return nil, fmt.Errorf("WeatherAPI error: %w", err)
 	}
 
-	// Публикация в Kafka
+	// 🔹 Публикация в Kafka
 	if s.producer != nil {
 		keyBytes := []byte(key)
 		valueBytes, _ := json.Marshal(w)
@@ -63,6 +64,7 @@ func (s *WeatherService) GetWeatherByCity(city string) (*models.Weather, error) 
 	return w, nil
 }
 
+// fetchFromWeatherAPI делает реальный запрос к WeatherAPI
 func (s *WeatherService) fetchFromWeatherAPI(city string) (*models.Weather, error) {
 	apiKey := os.Getenv("WEATHERAPI_KEY")
 	if apiKey == "" {
