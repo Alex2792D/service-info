@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"log"
 	"os"
+	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl/scram"
@@ -47,7 +48,9 @@ func (p *Producer) Publish(key, value []byte) error {
 		Value: value,
 	}
 
-	results := p.client.ProduceSync(context.Background(), msg)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	results := p.client.ProduceSync(ctx, msg)
 
 	// Проверяем результаты
 	for _, r := range results {
