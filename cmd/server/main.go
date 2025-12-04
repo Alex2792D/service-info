@@ -170,8 +170,7 @@ func main() {
 	// Получаем URL из env, fallback — локальный
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		log.Println("⚠️ DATABASE_URL не задан — использую локальное подключение")
-		dbURL = "host=localhost port=5432 user=postgres password=pass dbname=users sslmode=disable"
+		log.Fatal("❌ DATABASE_URL is required in production")
 	}
 
 	db, err := sql.Open("postgres", dbURL)
