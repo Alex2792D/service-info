@@ -249,7 +249,13 @@ func main() {
 
 	// 1. Подключаемся к PostgreSQL
 	// Получаем URL из env, fallback — локальный
+	// dbURL := os.Getenv("DATABASE_URL")
+	// if dbURL == "" {
+	// 	log.Fatal("❌ DATABASE_URL is required in production")
+	// }
 	dbURL := os.Getenv("DATABASE_URL")
+	log.Printf("🔍 DATABASE_URL: %q", dbURL) // Выведет значение или пустую строку
+
 	if dbURL == "" {
 		log.Fatal("❌ DATABASE_URL is required in production")
 	}

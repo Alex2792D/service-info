@@ -34,11 +34,8 @@ func (s *UserService) CreateUser(user models.UserData) error {
 	key := []byte(strconv.FormatInt(user.UserID, 10)) // ← безопасно для любых int64
 	value, _ := json.Marshal(user)
 
-	// ✅ Исправлено: Publish вместо Send
 	if err := s.producer.Publish(key, value); err != nil {
 		log.Printf("❌ Failed to publish user to Kafka: %v", err)
-		// ⚠️ Можно логгировать и не падать — зависит от требований.
-		// Пока оставим как есть (fire-and-forget), но ошибку не возвращаем.
 	}
 
 	return nil
