@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"log"
-	"os"
+	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl/scram"
@@ -16,25 +16,31 @@ type Consumer struct {
 }
 
 func NewConsumer(topic, group string) *Consumer {
-	brokers := []string{os.Getenv("KAFKA_BROKERS")}
-	username := os.Getenv("KAFKA_USERNAME")
-	password := os.Getenv("KAFKA_PASSWORD")
+	brokers := []string{getEnv("KAFKA_BROKERS", "")}
+	username := getEnv("KAFKA_USERNAME", "")
+	password := getEnv("KAFKA_PASSWORD", "")
 
 	if brokers[0] == "" || username == "" || password == "" {
-		log.Fatal("❌ KAFKA_BROKERS, KAFKA_USERNAME или KAFKA_PASSWORD не установлены")
+		log.Fatal("❌ KAFKA_BROKERS, KAFKA_USERNAME и KAFKA_PASSWORD обязательны")
 	}
 
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true, // для теста на Render
+		MinVersion: tls.VersionTLS12,
 	}
 
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(brokers...),
+		kgo.ClientID("service-info-consumer-" + group), // ← уникальный ID
 		kgo.DialTLSConfig(tlsConfig),
-		kgo.SASL(scram.Auth{User: username, Pass: password}.AsSha256Mechanism()),
+		kgo.SASL(scram.Auth{
+			User: username,
+			Pass: password,
+		}.AsSha256Mechanism()),
 		kgo.ConsumeTopics(topic),
 		kgo.ConsumerGroup(group),
-		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()), // читаем с начала
+		kgo.ConsumeResetOffset(kgo.NewOffset().AtEnd()), // ← читаем ТОЛЬКО новые сообщения
+		kgo.SessionTimeout(30 * time.Second),
+		kgo.HeartbeatInterval(10 * time.Second),
 	}
 
 	client, err := kgo.NewClient(opts...)
@@ -42,29 +48,32 @@ func NewConsumer(topic, group string) *Consumer {
 		log.Fatalf("❌ Failed to create Kafka consumer: %v", err)
 	}
 
-	log.Printf("✅ Kafka consumer initialized for topic: %s, group: %s", topic, group)
-	return &Consumer{
-		client: client,
-		topic:  topic,
-	}
+	log.Printf("✅ Kafka consumer ready | topic: %s | group: %s", topic, group)
+	return &Consumer{client: client, topic: topic}
 }
 
 func (c *Consumer) Start(handler func(key, value []byte)) {
 	go func() {
-		log.Printf("🔄 Consumer goroutine STARTED for topic: %s", c.topic)
+		log.Printf("🔄 Consumer started: %s", c.topic)
 		for {
-			log.Printf("📥 Polling fetches for %s...", c.topic)
 			fetches := c.client.PollFetches(context.Background())
-			log.Printf("📥 Fetched %d partitions", len(fetches))
 			if errs := fetches.Errors(); len(errs) > 0 {
-				log.Printf("❌ Kafka fetch errors: %v", errs)
+				log.Printf("⚠️ Kafka fetch errors (%s): %v", c.topic, errs)
+				time.Sleep(2 * time.Second)
+				continue
 			}
+
 			iter := fetches.RecordIter()
+			count := 0
 			for !iter.Done() {
 				record := iter.Next()
+				count++
 				if handler != nil {
 					handler(record.Key, record.Value)
 				}
+			}
+			if count > 0 {
+				log.Printf("✅ Processed %d record(s) from %s", count, c.topic)
 			}
 		}
 	}()

@@ -16,24 +16,35 @@ type Producer struct {
 	client *kgo.Client
 }
 
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
 func NewProducer(topic string) *Producer {
-	brokers := []string{os.Getenv("KAFKA_BROKERS")}
-	username := os.Getenv("KAFKA_USERNAME")
-	password := os.Getenv("KAFKA_PASSWORD")
+	brokers := []string{getEnv("KAFKA_BROKERS", "")}
+	username := getEnv("KAFKA_USERNAME", "")
+	password := getEnv("KAFKA_PASSWORD", "")
 
 	if brokers[0] == "" || username == "" || password == "" {
-		log.Fatal("❌ KAFKA_BROKERS, KAFKA_USERNAME или KAFKA_PASSWORD не установлены")
+		log.Fatal("❌ KAFKA_BROKERS, KAFKA_USERNAME и KAFKA_PASSWORD обязательны")
 	}
 
-	// TLS конфиг для Redpanda Cloud
+	// TLS 1.2+ (Redpanda использует валидные сертификаты — InsecureSkipVerify НЕ нужен)
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true, // для теста на Render, потом лучше указать Root CA
+		MinVersion: tls.VersionTLS12,
 	}
 
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(brokers...),
+		kgo.ClientID("service-info-producer-" + topic), // ← уникальный ID
 		kgo.DialTLSConfig(tlsConfig),
-		kgo.SASL(scram.Auth{User: username, Pass: password}.AsSha256Mechanism()),
+		kgo.SASL(scram.Auth{
+			User: username,
+			Pass: password,
+		}.AsSha256Mechanism()),
 	}
 
 	client, err := kgo.NewClient(opts...)
@@ -41,11 +52,8 @@ func NewProducer(topic string) *Producer {
 		log.Fatalf("❌ Failed to create Kafka producer: %v", err)
 	}
 
-	log.Printf("✅ Kafka producer initialized for topic: %s", topic)
-	return &Producer{
-		topic:  topic,
-		client: client,
-	}
+	log.Printf("✅ Kafka producer ready for topic: %s", topic)
+	return &Producer{topic: topic, client: client}
 }
 
 func (p *Producer) Close() {
@@ -59,19 +67,18 @@ func (p *Producer) Publish(key, value []byte) error {
 		Value: value,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	results := p.client.ProduceSync(ctx, msg)
-
 	for _, r := range results {
 		if r.Err != nil {
-			log.Printf("❌ Kafka publish error: %v", r.Err)
+			log.Printf("❌ Kafka publish failed: %v", r.Err)
 			return r.Err
 		}
 	}
 
-	log.Printf("✅ Message published: key=%s", string(key))
+	log.Printf("✅ Published to %s: key=%s", p.topic, string(key))
 	return nil
 }
 
