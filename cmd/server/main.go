@@ -229,6 +229,7 @@ import (
 	"syscall"
 	"time"
 
+	middleware "service-info/internal/Middleware"
 	"service-info/internal/handlers"
 	"service-info/internal/messaging"
 	"service-info/internal/repositories"
@@ -376,9 +377,18 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
+	// В main.go после создания роутера:
 
-	r.Get("/weather", handler.GetWeather)
-	r.Post("/user", handlerUser.CreateUser)
+	// Публичные роуты — доступны всем
+	r.Post("/user", handlerUser.CreateUser) // сюда приходит sendUserData
+
+	// Защищённые роуты — только для авторизованных
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.AuthRequired(redisClient)) // ← middleware здесь
+		r.Get("/weather", handler.GetWeather)
+		// r.Post("/user", handlerUser.CreateUser)
+
+	})
 
 	// ------------------------
 	// Server
