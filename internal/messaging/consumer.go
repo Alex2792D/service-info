@@ -37,6 +37,7 @@ func NewConsumer(topic, group string) *Consumer {
 			Pass: password,
 		}.AsSha256Mechanism()),
 		kgo.ConsumeTopics(topic),
+		// kgo.ConsumePartitions(kgo.Partition{Topic: topic, Partition: 0}),
 		kgo.ConsumerGroup(group),
 		kgo.ConsumeResetOffset(kgo.NewOffset().AtEnd()), // ← читаем ТОЛЬКО новые сообщения
 		kgo.SessionTimeout(30 * time.Second),
