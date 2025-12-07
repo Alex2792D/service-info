@@ -35,12 +35,6 @@ func main() {
 	if dbURL == "" {
 		log.Fatal("❌ DATABASE_URL is required in production")
 	}
-	// dbURL := os.Getenv("DATABASE_URL")
-	// log.Printf("🔍 DATABASE_URL: %q", dbURL) // Выведет значение или пустую строку
-
-	// if dbURL == "" {
-	// 	log.Fatal("❌ DATABASE_URL is required in production")
-	// }
 
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
@@ -49,7 +43,7 @@ func main() {
 	defer db.Close()
 
 	// ------------------------
-	// ✅ СЕРЫЙ БЛОК: СОЗДАНИЕ ТАБЛИЦЫ И ИНДЕКСА — НЕ ТРОГАТЬ
+	// ✅ СЕРЫЙ БЛОК: СОЗДАНИЕ ТАБЛИЦЫ И ИНДЕКСА
 	// ------------------------
 	_, err = db.Exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -105,10 +99,24 @@ func main() {
 	// ------------------------
 	weatherTopic := getEnv("WEATHER_KAFKA_TOPIC", "weather-updates")
 	userTopic := getEnv("USER_KAFKA_TOPIC", "user-events")
+	exchangeTopic := getEnv("EXCHANGE_KAFKA_TOPIC", "exchange-updates")
 
 	weatherProducer := messaging.NewProducer(weatherTopic)
 	userProducer := messaging.NewProducer(userTopic)
 
+	exchangeProducer := messaging.NewProducer(exchangeTopic)
+
+	// Consumer для курса валют→ Redis
+	exchangeConsumer := messaging.NewConsumer(exchangeTopic, "exchange-redis-syncer")
+	exchangeConsumer.Start(func(key, value []byte) {
+		keyStr := string(key)
+		// Сохраняем ВСЁ, что пришло от API — как есть (как в weatherConsumer)
+		if err := redisClient.Set(ctx, keyStr, value, 1*time.Hour).Err(); err != nil {
+			log.Printf("❌ Redis exchange write error: %v", err)
+		} else {
+			log.Printf("✅ Redis updated (exchange): %s", keyStr)
+		}
+	})
 	// Consumer для погоды → Redis
 	weatherConsumer := messaging.NewConsumer(weatherTopic, "weather-redis-syncer")
 	weatherConsumer.Start(func(key, value []byte) {
@@ -155,6 +163,8 @@ func main() {
 	handler := handlers.NewWeatherHandler(weatherService)
 	handlerUser := handlers.NewUserHandler(userService)
 
+	exchangeService := services.NewExchangeService(redisClient, exchangeProducer)
+	exchangeHandler := handlers.NewExchangeHandler(exchangeService)
 	// ------------------------
 	// Router
 	// ------------------------
@@ -164,6 +174,7 @@ func main() {
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
+
 	})
 	// В main.go после создания роутера:
 
@@ -174,6 +185,7 @@ func main() {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthRequired(redisClient)) // ← middleware здесь
 		r.Get("/weather", handler.GetWeather)
+		r.Get("/exchange", exchangeHandler.GetRate) // ← новая ручка
 		// r.Post("/user", handlerUser.CreateUser)
 
 	})
