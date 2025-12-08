@@ -110,7 +110,6 @@ func main() {
 	exchangeConsumer := messaging.NewConsumer(exchangeTopic, "exchange-redis-syncer")
 	exchangeConsumer.Start(func(key, value []byte) {
 		keyStr := string(key)
-		// Сохраняем ВСЁ, что пришло от API — как есть (как в weatherConsumer)
 		if err := redisClient.Set(ctx, keyStr, value, 1*time.Hour).Err(); err != nil {
 			log.Printf("❌ Redis exchange write error: %v", err)
 		} else {
@@ -137,6 +136,23 @@ func main() {
 	})
 
 	// 🔁 Consumer для пользователей → Redis
+	// userConsumer := messaging.NewConsumer(userTopic, "user-redis-syncer")
+	// userConsumer.Start(func(key, value []byte) {
+	// 	var user map[string]interface{}
+	// 	if err := json.Unmarshal(value, &user); err != nil {
+	// 		log.Printf("❌ Invalid Kafka user message: %v", err)
+	// 		return
+	// 	}
+	// 	keyStr := "user:" + string(key)
+	// 	if err := redisClient.Set(ctx, keyStr, value, 24*time.Hour).Err(); err != nil {
+	// 		log.Printf("❌ Redis user write error: %v", err)
+	// 	} else {
+	// 		log.Printf("✅ Redis updated (user): %s", keyStr)
+	// 	}
+	// })
+
+	// log.Println("✅ Kafka producers/consumers initialized")
+	// PrintAllUserKeys(redisClient) // см. реализацию ниже
 	userConsumer := messaging.NewConsumer(userTopic, "user-redis-syncer")
 	userConsumer.Start(func(key, value []byte) {
 		var user map[string]interface{}
@@ -145,15 +161,16 @@ func main() {
 			return
 		}
 		keyStr := "user:" + string(key)
+
 		if err := redisClient.Set(ctx, keyStr, value, 24*time.Hour).Err(); err != nil {
 			log.Printf("❌ Redis user write error: %v", err)
 		} else {
 			log.Printf("✅ Redis updated (user): %s", keyStr)
+
+			// Выводим все user-ключи ПОСЛЕ успешной записи
+			middleware.PrintAllUserKeys(redisClient)
 		}
 	})
-
-	log.Println("✅ Kafka producers/consumers initialized")
-
 	// ------------------------
 	// Services & Handlers
 	// ------------------------
