@@ -186,7 +186,6 @@ func main() {
 		r.Use(middleware.AuthRequired(redisClient)) // ← middleware здесь
 		r.Get("/weather", handler.GetWeather)
 		r.Get("/exchange", exchangeHandler.GetRate) // ← новая ручка
-		// r.Post("/user", handlerUser.CreateUser)
 
 	})
 
