@@ -29,7 +29,6 @@ func (s *UserService) CreateUser(user models.UserData) error {
 	if err := s.repo.Save(user); err != nil {
 		return err
 	}
-
 	// 2. Отправляем в Kafka
 	key := []byte(strconv.FormatInt(user.UserID, 10)) // ← безопасно для любых int64
 	value, _ := json.Marshal(user)
