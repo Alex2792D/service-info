@@ -28,7 +28,7 @@ func (h *WeatherHandler) GetWeather(w http.ResponseWriter, r *http.Request) {
 
 	weather, err := h.weatherService.GetWeatherByCity(city)
 	if err != nil {
-		log.Printf("❌ Ошибка для %s: %v", city, err)
+		log.Printf("Ошибка для %s: %v", city, err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Не удалось получить погоду"})

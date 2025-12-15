@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"service-info/internal/models"
 	"service-info/internal/services"
+	"strconv"
 )
 
 type UserHandler struct {
@@ -23,14 +24,23 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ✅ Валидация
-	if user.UserID <= 0 {
-		http.Error(w, "UserID is required and must be > 0", http.StatusBadRequest)
+	// Берём UserID из заголовка
+	userIDStr := r.Header.Get("X-User-ID")
+	if userIDStr == "" {
+		http.Error(w, "X-User-ID header is required", http.StatusBadRequest)
 		return
 	}
 
+	userIDInt, err := strconv.Atoi(userIDStr)
+	if err != nil || userIDInt <= 0 {
+		http.Error(w, "Invalid X-User-ID", http.StatusBadRequest)
+		return
+	}
+	user.UserID = int64(userIDInt)
+
+	// Создаём пользователя через сервис
 	if err := h.service.CreateUser(user); err != nil {
-		log.Printf("❌ CreateUser failed: %v", err)
+		log.Printf("CreateUser failed: %v", err)
 		http.Error(w, "Failed to create user", http.StatusInternalServerError)
 		return
 	}

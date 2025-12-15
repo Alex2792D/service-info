@@ -8,7 +8,6 @@ require (
 	github.com/klauspost/compress v1.18.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/twmb/franz-go/pkg/kmsg v1.12.0 // indirect
-	golang.org/x/crypto v0.45.0 // indirect
 )
 
 require (
@@ -17,5 +16,5 @@ require (
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
-	github.com/twmb/franz-go v1.9.0
+	github.com/twmb/franz-go v1.20.5
 )

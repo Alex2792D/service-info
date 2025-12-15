@@ -15,7 +15,6 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-// Save сохраняет пользователя в БД
 func (r *UserRepository) Save(user models.UserData) error {
 	_, err := r.db.Exec(
 		`INSERT INTO users (user_id, username, first_name, last_name, created_at) 
@@ -23,9 +22,9 @@ func (r *UserRepository) Save(user models.UserData) error {
 		user.UserID, user.UserName, user.FirstName, user.LastName, time.Now(),
 	)
 	if err != nil {
-		log.Printf("❌ Failed to save user to DB: %v", err)
+		log.Printf("Failed to save user to DB: %v", err)
 		return err
 	}
-	log.Printf("✅ User saved to DB: %d", user.UserID)
+	log.Printf("User saved to DB: %d", user.UserID)
 	return nil
 }

@@ -20,13 +20,13 @@ func (h *ExchangeHandler) GetRate(w http.ResponseWriter, r *http.Request) {
 	base := r.URL.Query().Get("base")
 	target := r.URL.Query().Get("to")
 	if base == "" || target == "" {
-		http.Error(w, "❌ Требуются параметры: ?base=USD&to=RUB", http.StatusBadRequest)
+		http.Error(w, "Требуются параметры: ?base=USD&to=RUB", http.StatusBadRequest)
 		return
 	}
 
 	rate, err := h.service.GetRate(base, target)
 	if err != nil {
-		log.Printf("❌ Exchange error (%s→%s): %v", base, target, err)
+		log.Printf("Exchange error (%s→%s): %v", base, target, err)
 		http.Error(w, "Не удалось получить курс", http.StatusInternalServerError)
 		return
 	}

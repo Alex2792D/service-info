@@ -1,0 +1,53 @@
+### 🎯 Test 1: Создать пользователя
+POST http://localhost:3000/user
+Content-Type: application/json
+X-User-ID: 11111
+
+{
+  "user_name": "Maria",
+  "first_name": "Maria",
+  "last_name": "Garina"
+}
+
+###
+
+### 🎯 Test 2: Получить погоду
+GET http://localhost:3000/weather?city=Saratov
+X-User-ID: 11111
+
+
+###
+
+### 🎯 Test 3: Получить курс обмена USD → EUR
+GET http://localhost:3000/exchange?base=USD&to=EUR
+X-User-ID: 11111
+
+###
+
+### 🎯 Test 4: Создать задачу через /admin (/weather example)
+POST http://localhost:3000/admin
+Content-Type: application/json
+
+{
+  "text": "/weather Moscow"
+}
+
+###
+
+### 🎯 Test 5: Создать задачу через /admin (/exchange example)
+POST http://localhost:3000/admin
+Content-Type: application/json
+
+{
+  "text": "/exchange USD EUR"
+}
+
+###
+
+### 🎯 Test 6: Попробовать /admin с некорректной командой
+POST http://localhost:3000/admin
+Content-Type: application/json
+
+{
+  "text": "/unknowncommand arg1"
+}
