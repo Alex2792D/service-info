@@ -10,6 +10,7 @@ import (
 type Consumer struct {
 	client *kgo.Client
 	topic  string
+	Group  string //убрать
 }
 
 func NewConsumer(topic, group string) *Consumer {
@@ -22,6 +23,7 @@ func NewConsumer(topic, group string) *Consumer {
 		kgo.ConsumeTopics(topic),
 		kgo.ConsumerGroup(group),
 		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
+		kgo.BlockRebalanceOnPoll(),
 	)
 
 	if kafkaEnv == "cloud" {
@@ -34,7 +36,7 @@ func NewConsumer(topic, group string) *Consumer {
 	}
 
 	log.Printf("Kafka consumer initialized for topic: %s, group: %s (env=%s)", topic, group, kafkaEnv)
-	return &Consumer{client: client, topic: topic}
+	return &Consumer{client: client, topic: topic, Group: group} //убрать
 }
 
 func (c *Consumer) Start(handler func(key, value []byte)) {

@@ -21,7 +21,6 @@ func (r *AdminRepository) DB() *sql.DB {
 	return r.db
 }
 
-// Сохраняем новую задачу
 func (r *AdminRepository) Save(ctx context.Context, task models.Task) error {
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO scheduled_tasks (title, args, created_at)
@@ -30,7 +29,6 @@ func (r *AdminRepository) Save(ctx context.Context, task models.Task) error {
 	return err
 }
 
-// Получаем топ популярных запросов
 func (r *AdminRepository) GetTopRequests(ctx context.Context) ([]models.PopularRequest, error) {
 	const sqlQuery = `
 SELECT * FROM (

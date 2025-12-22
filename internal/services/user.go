@@ -13,11 +13,12 @@ type UserServiceInterface interface {
 }
 
 type UserService struct {
-	repo     *repositories.UserRepository
-	producer *kafka.Producer
+	repo *repositories.UserRepository
+	// producer *kafka.Producer
+	producer kafka.ProducerInterface
 }
 
-func NewUserService(repo *repositories.UserRepository, producer *kafka.Producer) *UserService {
+func NewUserService(repo *repositories.UserRepository, producer kafka.ProducerInterface) *UserService {
 	return &UserService{repo: repo, producer: producer}
 }
 

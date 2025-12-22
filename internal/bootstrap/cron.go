@@ -10,6 +10,6 @@ import (
 )
 
 func StartCronJobs(ctx context.Context, adminRepo *repositories.AdminRepository, kafkaBundle *kafka.KafkaBundle, popularTopic string) {
-	popularPublisher := cron.NewPopularPublisher(adminRepo, kafkaBundle.UserProducer, popularTopic, 5*time.Minute)
+	popularPublisher := cron.NewPopularPublisher(adminRepo, kafkaBundle.PopularProducer, popularTopic, 5*time.Minute)
 	go popularPublisher.Start(ctx)
 }

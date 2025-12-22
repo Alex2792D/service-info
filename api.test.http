@@ -1,7 +1,7 @@
 ### 🎯 Test 1: Создать пользователя
 POST http://localhost:3000/user
 Content-Type: application/json
-X-User-ID: 11111
+X-User-ID: 90991
 
 {
   "user_name": "Maria",
@@ -12,15 +12,15 @@ X-User-ID: 11111
 ###
 
 ### 🎯 Test 2: Получить погоду
-GET http://localhost:3000/weather?city=Saratov
-X-User-ID: 11111
+GET http://localhost:3000/weather?city=Moscow
+X-User-ID:90999
 
 
 ###
 
 ### 🎯 Test 3: Получить курс обмена USD → EUR
-GET http://localhost:3000/exchange?base=USD&to=EUR
-X-User-ID: 11111
+GET http://localhost:3000/exchange?base=EUR&target=USD
+X-User-ID:  333333
 
 ###
 

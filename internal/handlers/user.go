@@ -24,7 +24,6 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Берём UserID из заголовка
 	userIDStr := r.Header.Get("X-User-ID")
 	if userIDStr == "" {
 		http.Error(w, "X-User-ID header is required", http.StatusBadRequest)
@@ -38,7 +37,6 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	user.UserID = int64(userIDInt)
 
-	// Создаём пользователя через сервис
 	if err := h.service.CreateUser(user); err != nil {
 		log.Printf("CreateUser failed: %v", err)
 		http.Error(w, "Failed to create user", http.StatusInternalServerError)

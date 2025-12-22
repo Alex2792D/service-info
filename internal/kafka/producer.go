@@ -10,6 +10,9 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
+type ProducerInterface interface {
+	PublishObjectAsync(key []byte, obj interface{})
+}
 type Producer struct {
 	topic  string
 	client *kgo.Client

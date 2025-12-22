@@ -41,7 +41,7 @@ func (p *PopularPublisher) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			if err := p.runOnce(ctx); err != nil {
+			if err := p.RunOnce(ctx); err != nil {
 				log.Printf("PopularPublisher iteration failed: %v", err)
 			}
 
@@ -52,7 +52,7 @@ func (p *PopularPublisher) Start(ctx context.Context) {
 	}
 }
 
-func (p *PopularPublisher) runOnce(ctx context.Context) error {
+func (p *PopularPublisher) RunOnce(ctx context.Context) error {
 	top, err := p.adminRepo.GetTopRequests(ctx)
 	if err != nil {
 		return err

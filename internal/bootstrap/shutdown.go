@@ -31,6 +31,8 @@ func GracefulShutdown(srv *http.Server, redisClient *redis.Client, kafkaBundle *
 			kafkaBundle.WeatherProducer.Close()
 			kafkaBundle.UserProducer.Close()
 			kafkaBundle.ExchangeProducer.Close()
+			kafkaBundle.PopularProducer.Close()
+
 		}
 
 		if redisClient != nil {
