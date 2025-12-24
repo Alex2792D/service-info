@@ -50,6 +50,10 @@
 
 ---
 
+## Архитектура
+
+![C4 Container Diagram](diagram.png)
+
 ## Требования
 
 - Docker
@@ -62,27 +66,23 @@
 
 ## Быстрый старт
 
-````bash
+```bash
 # 1. Клонируйте репозиторий
 git clone https://github.com/Alex2792D/service-info.git
 cd service-info
-
-# 2. Скопируйте шаблон конфигурации
+# 2. Скопируйте шаблон конфигурации и вставьте ключи
 cp .env.example .env
-
+3. Запуск контеинера
 docker compose up -d
+4. Логи приложения
  docker compose logs -f app
+5. Остановить контейнеры
  docker compose down
+```
+
+## Тестовые ключи
 
   <details>
-  <summary> </summary>
-  </details>
-
-  ```env
   WEATHERAPI_KEY=622256b9dda24a82b29124055252801
   FREECURRENCY_API_KEY=fca_live_ufym9fxsdW5Qz8zVSChBpGY7j6XZtAQnKc0mupAE
-
-## Архитектура
-
-![C4 Container Diagram](diagram.png)
-````
+  </details>
