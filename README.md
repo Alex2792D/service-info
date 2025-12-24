@@ -62,7 +62,7 @@
 
 ## Быстрый старт
 
-```bash
+````bash
 # 1. Клонируйте репозиторий
 git clone https://github.com/Alex2792D/service-info.git
 cd service-info
@@ -72,10 +72,13 @@ cp .env.example .env
 
 
 <details>
-<summary>WEATHERAPI_KEY=622256b9dda24a82b29124055252801
-FREECURRENCY_API_KEY=fca_live_ufym9fxsdW5Qz8zVSChBpGY7j6XZtAQnKc0mupAE</summary>
+  <summary>🔑 Публичные API‑ключи (демо‑режим)</summary>
+
+  ```env
+  WEATHERAPI_KEY=622256b9dda24a82b29124055252801
+  FREECURRENCY_API_KEY=fca_live_ufym9fxsdW5Qz8zVSChBpGY7j6XZtAQnKc0mupAE
 
 ## Архитектура
 
-![C4 Container Diagram](diagram.svg)
-```
+![C4 Container Diagram](diagram.png)
+````
