@@ -70,9 +70,13 @@ cd service-info
 # 2. Скопируйте шаблон конфигурации
 cp .env.example .env
 
+docker compose up -d
+ docker compose logs -f app
+ docker compose down
 
-<details>
-  <summary>🔑 Публичные API‑ключи (демо‑режим)</summary>
+  <details>
+  <summary> </summary>
+  </details>
 
   ```env
   WEATHERAPI_KEY=622256b9dda24a82b29124055252801
