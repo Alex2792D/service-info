@@ -6,7 +6,7 @@ import (
 	"service-info/internal/kafka"
 )
 
-func StartPassthroughMultiplexer(consumer *kafka.Consumer, outCh chan []byte) {
+func StartSoloMultiplexer(consumer *kafka.Consumer, outCh chan []byte) {
 	if consumer == nil || outCh == nil {
 		return
 	}
@@ -14,7 +14,7 @@ func StartPassthroughMultiplexer(consumer *kafka.Consumer, outCh chan []byte) {
 		select {
 		case outCh <- value:
 		default:
-			log.Printf("⚠️ Channel full, dropping message (key=%s)", string(key))
+			log.Printf("Channel full, dropping message (key=%s)", string(key))
 		}
 	})
 }

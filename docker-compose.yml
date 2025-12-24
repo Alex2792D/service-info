@@ -1,144 +1,36 @@
-# version: "3.8"
-
-# services:
-#   zookeeper:
-#     image: confluentinc/cp-zookeeper:7.4.0
-#     container_name: zookeeper
-#     environment:
-#       ZOOKEEPER_CLIENT_PORT: 2181
-#       ZOOKEEPER_TICK_TIME: 2000
-#     ports:
-#       - "2181:2181"
-
-#   kafka:
-#     image: confluentinc/cp-kafka:7.4.0
-#     container_name: kafka
-#     depends_on:
-#       - zookeeper
-#     ports:
-#       - "9092:9092"
-#       - "9093:9093"
-#     environment:
-#       KAFKA_BROKER_ID: 1
-#       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-#       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-#       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-#       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-#       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-#       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-#       KAFKA_JMX_PORT: 9999
-#     healthcheck:
-#       test:
-#         ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
-#       interval: 30s
-#       timeout: 10s
-#       retries: 3
-
-#   kafka-ui:
-#     image: provectuslabs/kafka-ui:latest
-#     container_name: kafka-ui
-#     ports:
-#       - "8081:8080" # Хост:8081 → Контейнер:8080
-#     environment:
-#       KAFKA_CLUSTERS_0_NAME: local
-#       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
-#     depends_on:
-#       - kafka
-
-#   redis:
-#     image: redis:7.2-alpine
-#     container_name: redis
-#     ports:
-#       - "6379:6379"
-#     healthcheck:
-#       test: ["CMD", "redis-cli", "ping"]
-#       interval: 10s
-#       timeout: 5s
-#       retries: 3
-#     volumes:
-#       - redis-data:/data
-
-# volumes:
-#   redis-data:
-
-# version: "3.8"
-
-# services:
-#   zookeeper:
-#     image: confluentinc/cp-zookeeper:7.4.0
-#     container_name: zookeeper
-#     environment:
-#       ZOOKEEPER_CLIENT_PORT: 2181
-#       ZOOKEEPER_TICK_TIME: 2000
-#     ports:
-#       - "2181:2181"
-#     networks:
-#       - kafka-net
-
-#   kafka:
-#     image: confluentinc/cp-kafka:7.4.0
-#     container_name: kafka
-#     depends_on:
-#       - zookeeper
-#     ports:
-#       - "9092:9092"
-#     environment:
-#       KAFKA_BROKER_ID: 1
-#       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-#       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-#       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-#       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-#       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-#       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-#       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-#       KAFKA_JMX_PORT: 9999
-#     healthcheck:
-#       test:
-#         ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list"]
-#       interval: 30s
-#       timeout: 10s
-#       retries: 3
-#     networks:
-#       - kafka-net
-
-#   kafka-ui:
-#     image: provectuslabs/kafka-ui:latest
-#     container_name: kafka-ui
-#     ports:
-#       - "8081:8080"
-#     environment:
-#       KAFKA_CLUSTERS_0_NAME: local
-#       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
-#     depends_on:
-#       - kafka
-#     restart: on-failure
-#     command: ["/bin/sh", "-c", "sleep 30 && java -jar /app/kafka-ui.jar"]
-#     networks:
-#       - kafka-net
-
-#   redis:
-#     image: redis:7.2-alpine
-#     container_name: redis
-#     ports:
-#       - "6379:6379"
-#     healthcheck:
-#       test: ["CMD", "redis-cli", "ping"]
-#       interval: 10s
-#       timeout: 5s
-#       retries: 3
-#     volumes:
-#       - redis-data:/data
-#     networks:
-#       - kafka-net
-
-# volumes:
-#   redis-data:
-
-# networks:
-#   kafka-net:
-#     driver: bridge
+# version: "3.9"
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: mb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.7.0
     container_name: zookeeper
@@ -147,6 +39,29 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+
+  liquibase:
+    image: liquibase/liquibase:latest
+    container_name: liquibase
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./liquibase/changelog:/liquibase/changelog:ro
+      - ./liquibase/drivers/postgresql-42.7.3.jar:/liquibase/drivers/postgresql.jar:ro
+    working_dir: /liquibase/changelog # ← КЛЮЧЕВО!
+    command:
+      - --classpath=/liquibase/drivers/postgresql.jar
+      - --changeLogFile=changelog-master.yaml # ← относительный путь
+      - --url=jdbc:postgresql://postgres:5432/mb
+      - --username=postgres
+      - --password=postgres
+      - update # ← команда в конце
+        # [
+        #   "sh",
+        #   "-c",
+        #   "echo '=== Files in /liquibase/changelog/ ==='; ls -la /liquibase/changelog/; echo '=== Content of changelog-master.yaml ==='; cat /liquibase/changelog/changelog-master.yaml; echo '=== Content of 001...yaml ==='; cat /liquibase/changelog/001-create-scheduled-tasks.yaml 2>/dev/null || echo 'NOT FOUND'",
+        # ]
 
   kafka:
     image: confluentinc/cp-kafka:7.7.0
@@ -159,18 +74,11 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
-
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: |
-        PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
-
-      KAFKA_LISTENERS: |
-        PLAINTEXT://kafka:29092,EXTERNAL://0.0.0.0:9092
-
-      KAFKA_ADVERTISED_LISTENERS: |
-        PLAINTEXT://kafka:29092,EXTERNAL://localhost:9092
-
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,EXTERNAL://localhost:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
@@ -186,18 +94,34 @@ services:
     depends_on:
       - kafka
 
-  redis:
-    image: redis:7.2-alpine
-    container_name: redis
+  app:
+    build: .
+    container_name: service-info-app
     ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
+      - "3000:3000"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+      - liquibase
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.7.0
+    depends_on:
+      - kafka
+    entrypoint:
+      - sh
+      - -c
+      - |
+        # Ждём пока Kafka поднимется
+        sleep 10
+        kafka-topics --bootstrap-server kafka:29092 --create --topic weather-updates --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --topic user-events --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --topic exchange-updates --partitions 1 --replication-factor 1
+        kafka-topics --bootstrap-server kafka:29092 --create --topic popular-requests --partitions 1 --replication-factor 1
 
 volumes:
   redis-data:
+  postgres-data:
